@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SpeakLab — Vivek's daily speaking gym</title>
+<title>SpeakLab v2 — Vivek's daily speaking gym</title>
 <style>
   :root{
     --bg:#0f172a; --card:#1e293b; --card2:#273449; --text:#e2e8f0; --muted:#94a3b8;
@@ -18,6 +18,7 @@
   button{background:var(--accent); color:#04263a; border:none; border-radius:8px; padding:9px 14px; font-size:.9rem; font-weight:600; cursor:pointer; margin:3px 4px 3px 0;}
   button.secondary{background:var(--card2); color:var(--text); border:1px solid var(--line);}
   button.danger{background:var(--bad); color:#3a0404;}
+  button.big{font-size:1.05rem; padding:14px 22px; width:100%;}
   button:disabled{opacity:.4; cursor:not-allowed;}
   textarea{width:100%; min-height:110px; background:#0b1222; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:10px; font-size:.92rem;}
   .row{display:flex; flex-wrap:wrap; gap:10px;}
@@ -32,6 +33,7 @@
   .pill.active{border-color:var(--accent); color:var(--accent);}
   .pill.done{border-color:var(--good); color:var(--good);}
   .chunk{background:var(--card2); border-radius:8px; padding:8px 12px; margin:6px 0; font-size:.92rem; display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .chunk .tag{font-size:.7rem; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; white-space:nowrap;}
   table{width:100%; border-collapse:collapse; font-size:.85rem;}
   th,td{border-bottom:1px solid var(--line); padding:6px 8px; text-align:left;}
   th{color:var(--muted); font-weight:600;}
@@ -45,20 +47,40 @@
   .hl-sign{background:#14532d; border-radius:3px; padding:0 2px;}
   .hl-fill{background:#78350f; border-radius:3px; padding:0 2px;}
   #transcriptView{background:#0b1222; border:1px solid var(--line); border-radius:8px; padding:10px; font-size:.92rem; min-height:60px; margin-top:8px;}
+  /* mode toggle */
+  .modeWrap{display:flex; gap:6px; margin:8px 0;}
+  .modeBtn{flex:1; background:var(--card2); color:var(--muted); border:1px solid var(--line); border-radius:8px; padding:10px; text-align:center; cursor:pointer; font-weight:600;}
+  .modeBtn.on{border-color:var(--accent); color:var(--accent); background:#0b2a3a;}
+  /* wizard */
+  #wizard{position:fixed; inset:0; background:rgba(2,6,17,.88); z-index:50; display:flex; align-items:center; justify-content:center; padding:16px;}
+  #wizBox{background:var(--card); border:1px solid var(--accent); border-radius:14px; max-width:520px; width:100%; padding:22px;}
+  #wizBox h3{color:var(--accent); margin-bottom:8px;}
+  #wizBox p{font-size:.95rem; white-space:pre-line; margin-bottom:14px;}
+  #wizStep{color:var(--muted); font-size:.78rem; margin-bottom:6px;}
 </style>
 </head>
 <body>
 
-<h1>SpeakLab</h1>
-<div class="sub">Your 17-minute daily speaking gym. Structure beats fluency: map first, short sentences, signposts. Works best in Chrome (mic + live transcription).</div>
+<h1>SpeakLab <span style="font-size:.8rem;color:var(--muted)">v2</span></h1>
+<div class="sub">Your 17-minute daily speaking gym. Structure beats fluency: map first, short sentences, signposts.
+  <a href="guide.html" style="color:var(--accent)">📖 User guide</a> ·
+  <a href="#" onclick="startTour();return false" style="color:var(--accent)">▶ Replay walkthrough</a></div>
 
-<!-- SESSION PICKER -->
+<!-- TODAY -->
 <div class="card" id="pickerCard">
-  <h2>Today's session</h2>
-  <div class="small" id="suggestLine"></div>
-  <button onclick="startSession('A')">Day A — Structure (4/3/2 re-record)</button>
-  <button onclick="startSession('B')">Day B — Chunks &amp; delivery</button>
-  <button class="secondary" onclick="startSession('F')">Free rep (just record &amp; analyse)</button>
+  <h2>1 · Choose your English for today</h2>
+  <div class="modeWrap">
+    <div class="modeBtn" id="modePro" onclick="setMode('pro')">💼 Work English<br><span class="small">meetings, design talk</span></div>
+    <div class="modeBtn" id="modeEvd" onclick="setMode('evd')">☕ Everyday English<br><span class="small">colleagues, stories, chat</span></div>
+  </div>
+  <h2>2 · Start — the app guides every step</h2>
+  <button class="big" onclick="startAuto()" id="btnAuto">▶ Start today's session</button>
+  <div class="small" id="suggestLine" style="margin-top:6px"></div>
+  <details><summary>Choose session type manually</summary>
+    <button onclick="startSession('A')">Day A — Structure (re-record loop)</button>
+    <button onclick="startSession('B')">Day B — Phrases &amp; delivery</button>
+    <button class="secondary" onclick="startSession('F')">Free rep (just record &amp; analyse)</button>
+  </details>
 </div>
 
 <!-- GUIDED SESSION -->
@@ -88,7 +110,7 @@
   <div class="small" style="margin-top:6px">Live transcript (Chrome). If it misses words, fix them below before analysing — rough is fine.</div>
   <textarea id="transcript" placeholder="Transcript appears here while you speak, or paste one..."></textarea>
   <button onclick="analyse()">Analyse this attempt</button>
-  <button class="secondary" onclick="downloadAudio()" id="btnDl" disabled>Save audio file</button>
+  <button class="secondary" onclick="downloadAudio()" id="btnDl" disabled>Save audio file(s)</button>
 </div>
 
 <!-- RESULTS -->
@@ -105,14 +127,16 @@
   <span id="copyMsg" class="small"></span>
 </div>
 
-<!-- CHUNK BANK -->
+<!-- PHRASE LIBRARY -->
 <div class="card">
-  <h2>Chunk bank — today's three</h2>
-  <div class="small">Say each aloud in a full sentence about YOUR current work. Tick when used in a recording.</div>
+  <h2>Today's 5 phrases — say each in YOUR own sentence, out loud</h2>
+  <div class="small">This is the "1,000 phrases" method done properly: a few phrases a day, forced into your own real sentences, recycled until automatic. Tick ✓ when you've used one in a recording. Least-used phrases come back sooner.</div>
   <div id="todayChunks"></div>
-  <details><summary>Full bank / add your own</summary>
-    <div id="allChunks"></div>
-    <input id="newChunk" placeholder="Add a phrase you heard a native speaker use..." style="width:70%; padding:8px; background:#0b1222; color:var(--text); border:1px solid var(--line); border-radius:8px">
+  <details><summary>Full library / add your own</summary>
+    <div class="small">Library grows over time toward 1,000 — Claude adds curated batches weekly. Used-counts drive rotation.</div>
+    <div id="allChunks" style="max-height:300px; overflow-y:auto"></div>
+    <input id="newChunk" placeholder="Add a phrase you heard a native speaker use..." style="width:60%; padding:8px; background:#0b1222; color:var(--text); border:1px solid var(--line); border-radius:8px">
+    <select id="newChunkMode" style="background:#0b1222;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px"><option value="pro">Work</option><option value="evd">Everyday</option></select>
     <button onclick="addChunk()">Add</button>
   </details>
 </div>
@@ -123,17 +147,29 @@
   <canvas id="chart" width="900" height="120"></canvas>
   <details><summary>Session history</summary>
     <table id="historyTable"><thead><tr>
-      <th>Date</th><th>Type</th><th>Att.</th><th>Words</th><th>WPM</th><th>Signposts/min</th><th>Chains/100w</th><th>Fillers</th>
+      <th>Date</th><th>Mode</th><th>Att.</th><th>Words</th><th>WPM</th><th>Signposts/min</th><th>Chains/100w</th><th>Fillers</th>
     </tr></thead><tbody></tbody></table>
     <button class="secondary" onclick="exportHistory()">Export history (JSON)</button>
   </details>
 </div>
 
-<div class="small" style="margin-bottom:30px">Part of Loops/Spoken-English. Weekly scored review stays Sunday 7pm — bring your best Attempt 2. Evidence base: deep-research-2026-07-12-sentence-organisation.md<br>
-Privacy: live transcription uses Chrome's speech service, so recording audio is processed by Google. Audio files themselves stay on your machine unless you share them.</div>
+<div class="small" style="margin-bottom:30px">Part of Loops/Spoken-English. Weekly scored review Sunday 7pm — bring your best Attempt 2.<br>
+Privacy: live transcription uses Chrome's speech service, so recording audio is processed by Google. Audio files and history stay on this device unless you share them.</div>
+
+<!-- WIZARD -->
+<div id="wizard" style="display:none">
+  <div id="wizBox">
+    <div id="wizStep"></div>
+    <h3 id="wizTitle"></h3>
+    <p id="wizText"></p>
+    <button onclick="wizNext()" id="wizNextBtn">Next ▶</button>
+    <button class="secondary" onclick="wizPrev()" id="wizPrevBtn">◀ Back</button>
+    <button class="secondary" onclick="wizClose()">Skip tour</button>
+  </div>
+</div>
 
 <script>
-/* ================= METRICS ENGINE ================= */
+/* ================= METRICS ENGINE (unchanged from v1, review-fixed) ================= */
 const SIGNPOSTS = [
   "first of all","firstly","first","secondly","second","thirdly","third","next","after that",
   "finally","to begin with","let me walk you through","there are three","there are two",
@@ -146,7 +182,6 @@ const SIGNPOSTS = [
 const FILLERS = ["um","uh","ah","er","you know","sort of","kind of","basically","actually","like"];
 
 function countPhrase(text, phrase){
-  // word-boundary phrase count on a lowercased, space-normalised string
   const esc = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp("(^|[^a-z])" + esc + "($|[^a-z])", "g");
   let n = 0, m;
@@ -157,10 +192,9 @@ function countPhrase(text, phrase){
 function computeMetrics(rawText, seconds){
   const text = " " + rawText.toLowerCase().replace(/[\n\r]+/g," ").replace(/\s+/g," ").trim() + " ";
   const words = text.trim().length ? text.trim().split(/\s+/).length : 0;
-  const mins = seconds > 0 ? seconds/60 : (words>0 ? words/110 : 1); // estimate if no timer
+  const mins = seconds > 0 ? seconds/60 : (words>0 ? words/110 : 1);
   const wpm = words>0 ? Math.round(words/mins) : 0;
 
-  // signposts (count longer phrases first, remove so "first of all" isn't double-counted as "first")
   let sText = text, signCount = 0, signFound = [];
   const sorted = [...SIGNPOSTS].sort((a,b)=>b.length-a.length);
   for(const p of sorted){
@@ -168,23 +202,22 @@ function computeMetrics(rawText, seconds){
     if(c>0){ signCount += c; signFound.push(p+" ×"+c);
       sText = sText.split(p).join(" "); }
   }
-  // cap counted signposts at ~1 per 10 seconds so chanting "first next finally" can't game the score (fix B5)
+  // cap counted signposts at ~1 per 10 seconds so chanting can't game the score
   const signCap = Math.max(3, Math.ceil(mins*6));
   const cappedSign = Math.min(signCount, signCap);
   const spm = +(cappedSign/mins).toFixed(1);
   const signCapped = signCount > signCap;
 
-  // chain connectors — exclude legitimate uses like "back then", "since then" (review fix B5)
+  // chain connectors — exclude legitimate "back then / since then" etc.
   const thenCount = countPhrase(text,"then");
   const legitThen = ["back then","since then","by then","until then","from then","now and then"]
     .reduce((n,p)=>n+countPhrase(text,p),0);
   const andThen  = countPhrase(text,"and then");
   const andCount = countPhrase(text,"and");
   const soCount  = countPhrase(text,"so");
-  const chains = Math.max(0, thenCount - legitThen) + andThen; // "and then" double-weighted — it's the worst habit
+  const chains = Math.max(0, thenCount - legitThen) + andThen;
   const chainsPer100 = words>0 ? +((chains/words)*100).toFixed(1) : 0;
 
-  // fillers
   let fillerCount = 0, fillerFound = [];
   for(const f of FILLERS){
     const c = countPhrase(text,f);
@@ -192,7 +225,6 @@ function computeMetrics(rawText, seconds){
   }
   const fillersPerMin = +(fillerCount/mins).toFixed(1);
 
-  // vocabulary richness
   const tokens = text.trim().split(/\s+/).filter(w=>w.length>0);
   const types = new Set(tokens.map(w=>w.replace(/[^a-z']/g,""))).size;
   const ttr = words>0 ? +(types/words).toFixed(2) : 0;
@@ -214,41 +246,104 @@ function highlightTranscript(rawText){
   return html;
 }
 
+/* ================= MODES ================= */
+function getMode(){ return localStorage.getItem("speaklab_mode") || "pro"; }
+function setMode(m){
+  localStorage.setItem("speaklab_mode", m);
+  document.getElementById("modePro").classList.toggle("on", m==="pro");
+  document.getElementById("modeEvd").classList.toggle("on", m==="evd");
+  renderChunks();
+}
+
+const TOPICS = {
+  pro: ["An SAP process you'd explain in ISTEQ this week","A design decision you made recently and why",
+        "A risk you're watching and what should be done","Why a vendor's design isn't ready to sign off",
+        "Explain a BTP concept to a non-technical manager","A blocker you faced and how you handled it"],
+  evd: ["Your weekend — two things that happened","The last cricket match you played or watched",
+        "A funny thing Reya did recently","A place in Sydney you'd recommend and why",
+        "A movie/show you watched — worth it or not?","Something you're planning for the family"]
+};
+// Personalised topics: imported once via a #topics= link from Claude (kept out of the public page).
+function getTopics(){
+  try{ const t=JSON.parse(localStorage.getItem("speaklab_topics")||"null");
+       if(t && t.length) return t; }catch(e){}
+  return TOPICS.pro.map(t=>({m:"pro",t})).concat(TOPICS.evd.map(t=>({m:"evd",t})));
+}
+// least-recently-suggested rotation so topics don't repeat
+function randomTopic(){
+  const mode=getMode();
+  const pool=getTopics().filter(x=>x.m===mode);
+  if(!pool.length) return "Anything from your week — end to end";
+  let seen={}; try{ seen=JSON.parse(localStorage.getItem("speaklab_topic_seen")||"{}"); }catch(e){}
+  pool.sort((a,b)=>(seen[a.t]||0)-(seen[b.t]||0));
+  const candidates=pool.slice(0, Math.max(1, Math.min(5, pool.length)));
+  const pick=candidates[Math.floor(Math.random()*candidates.length)];
+  seen[pick.t]=Date.now();
+  try{ localStorage.setItem("speaklab_topic_seen",JSON.stringify(seen)); }catch(e){}
+  return pick.t;
+}
+function importTopicsFromHash(){
+  if(location.hash && location.hash.startsWith("#topics=")){
+    try{
+      const json=decodeURIComponent(escape(atob(location.hash.slice(8))));
+      const arr=JSON.parse(json);
+      if(Array.isArray(arr) && arr.length){
+        localStorage.setItem("speaklab_topics", JSON.stringify(arr));
+        history.replaceState(null,"",location.pathname+location.search);
+        alert("✓ "+arr.length+" personal topics loaded. They'll rotate through your sessions.");
+      }
+    }catch(e){ alert("Topic link couldn't be read: "+e.message); }
+  }
+}
+
 /* ================= SESSIONS ================= */
-const PROTOCOLS = {
-  A: { name:"Day A — Structure (4/3/2)", phases:[
-    {n:"Warm-up", s:120, i:"Say today's 3 chunks aloud (see Chunk bank below), each inside a full sentence about your real work. Confident, smooth delivery."},
-    {n:"Pick topic", s:60, i:"Pick ONE real topic — a work topic (SAP process, design decision, risk) OR a personal one (your weekend, the cricket match, a family story). Rotate: work most days, personal 1-2× a week. Note 2-3 points. Don't overthink it."},
-    {n:"Attempt 1 — record", s:240, rec:true, i:"Explain it start to finish. 🎙 Recording starts with this phase. Don't self-correct — just get it out. This is the 'before'."},
-    {n:"Review & plan", s:240, i:"Analyse Attempt 1 (button below). Find the then-chains. Now plan out loud:\n• Your MAP: 'There are three parts: X, Y, Z.'\n• Which signposts you'll use: First / Next / After that / Finally.\n• Rebuild your 2 worst sentences aloud."},
-    {n:"Attempt 2 — record", s:180, rec:true, i:"Same topic, one minute less. Map FIRST, then signposted steps. Break every 'and then' into a new sentence. This re-take is where the improvement happens."},
-    {n:"Lock in", s:180, i:"Analyse Attempt 2 and compare. Say your best new sentence 5 times. Note tomorrow's topic. Save to history."}
+function buildProtocols(){
+  const isPro = getMode()==="pro";
+  const topicHint = randomTopic();
+  const mapHint = isPro
+    ? "Plan your MAP out loud: 'There are three parts: X, Y, Z.' Pick signposts: First / Next / After that / Finally."
+    : "Plan your opener out loud: 'You won't believe my weekend — two things happened.' Keep sentences short; use story phrases: 'Long story short…', 'Turns out…', 'The funny thing was…'";
+  return {
+  A: { name:(isPro?"Day A — Structure (Work)":"Day A — Structure (Everyday)"), phases:[
+    {n:"Warm-up", s:120, i:"Say today's 5 phrases aloud (Phrase card below), each inside a full sentence about your real life or work."},
+    {n:"Pick topic", s:60, i:"Suggested topic: \""+topicHint+"\"\nOr pick your own. Note 2-3 points. Don't overthink it."},
+    {n:"Attempt 1 — record", s:240, rec:true, i:"Explain it start to finish. 🎙 Recording starts now. Don't self-correct — just get it out. This is the 'before'."},
+    {n:"Review & plan", s:240, i:"Click 'Analyse this attempt' below. Look at the red then-chains.\n"+mapHint+"\nRebuild your 2 worst sentences aloud."},
+    {n:"Attempt 2 — record", s:180, rec:true, i:"Same topic, one minute less. "+(isPro?"Map FIRST, then signposted steps.":"Opener first, then short sentences with story phrases.")+" Break every 'and then' into a new sentence. This re-take is where improvement happens."},
+    {n:"Lock in", s:180, i:"Analyse Attempt 2 and compare with Attempt 1. Say your best new sentence 5 times. Save to history."}
   ]},
-  B: { name:"Day B — Chunks & delivery", phases:[
-    {n:"Warm-up", s:120, i:"Say yesterday's chunks aloud from memory — full sentences, real work context."},
-    {n:"Encode chunks", s:240, i:"Take today's 3 chunks. For each, name 2 real SAP situations where you could use it (say them out loud: 'When the vendor questions my design, I'll say...')."},
-    {n:"Forced retrieval — record", s:240, rec:true, i:"🎙 Recording. Make NEW full sentences with each chunk about your actual current work. Not recitation — your own thoughts wearing the new phrases."},
-    {n:"Shadowing", s:240, i:"Play a 30-45 sec clip of a good speaker and shadow it 2-3 times — match rhythm and intonation. Steal one phrase for the bank.\nNo hunting: use any TED talk opening (ted.com), an SAP TechEd keynote on YouTube, or an ABC News (Australia) segment. Bookmark one channel and reuse it."},
-    {n:"Cool-down", s:180, i:"Analyse the recording. Tick the chunks you actually used. Add the stolen phrase to the bank. Save to history."}
+  B: { name:"Day B — Phrases & delivery", phases:[
+    {n:"Warm-up", s:120, i:"Say yesterday's phrases aloud from memory — full sentences, real context."},
+    {n:"Encode phrases", s:240, i:"Take today's 5 phrases. For each, name 2 real situations where you could use it (say them out loud: 'When the vendor questions my design, I'll say…' / 'When Sam asks about my weekend, I'll say…')."},
+    {n:"Forced retrieval — record", s:240, rec:true, i:"🎙 Recording. Make NEW full sentences with each phrase about your actual life/work. Not recitation — your own thoughts wearing the new phrases."},
+    {n:"Shadowing", s:240, i:"Play a 30-45 sec clip of a good speaker and shadow it 2-3 times — match rhythm and intonation. Steal one phrase for the library.\nNo hunting: any TED talk opening, an SAP TechEd keynote on YouTube, or an ABC News (Australia) segment."},
+    {n:"Cool-down", s:180, i:"Analyse the recording. Tick the phrases you actually used. Add the stolen phrase to the library. Save to history."}
   ]},
   F: { name:"Free rep", phases:[
-    {n:"Record & analyse", s:600, rec:true, i:"Record anything work-related — a standup, a design explanation, meeting prep. Then analyse and save."}
-  ]}
-};
+    {n:"Record & analyse", s:600, rec:true, i:"Record anything — a standup, a story, meeting prep. Then analyse and save."}
+  ]}};
+}
 
 let session=null, phaseIdx=-1, timerInt=null, timeLeft=0;
 let attempts=[], currentAttempt=0, recStart=null, lastDuration=0, recordingCount=0, unsaved=false;
-let attemptBlobs=[]; // one audio blob kept per attempt (review fix B7)
+let attemptBlobs=[];
 
+function startAuto(){
+  const day=new Date().getDay();
+  const type=(day===2||day===4)?"B":(day===0||day===6)?"F":"A";
+  startSession(type);
+}
 function startSession(type){
-  session = PROTOCOLS[type]; session.type=type;
+  const P = buildProtocols();
+  session = P[type]; session.type=type;
   attempts=[]; currentAttempt=0; recordingCount=0; attemptBlobs=[]; phaseIdx=-1;
   document.getElementById("sessionCard").style.display="block";
   document.getElementById("pickerCard").style.display="none";
   renderPills();
   document.getElementById("phaseName").textContent = session.name + " — press Start";
-  document.getElementById("phaseInstr").textContent = "17 minutes. Real work topics only.";
+  document.getElementById("phaseInstr").textContent = "About 17 minutes. Real topics only.";
   document.getElementById("btnNext").textContent = "Start ▶";
+  document.getElementById("sessionCard").scrollIntoView({behavior:"smooth"});
 }
 
 function renderPills(){
@@ -296,7 +391,7 @@ function beep(){
   o.start(); o.stop(ctx.currentTime+.6);}catch(e){}
 }
 
-/* ================= RECORDING + SPEECH ================= */
+/* ================= RECORDING + SPEECH (review-fixed) ================= */
 let mediaRecorder=null, audioChunks=[], audioBlob=null, recognition=null, recording=false, finalTranscript="";
 
 async function toggleRecording(){
@@ -309,7 +404,7 @@ async function toggleRecording(){
       const attemptForThisRecording = recordingCount + 1;
       mediaRecorder.onstop = ()=>{
         audioBlob = new Blob(audioChunks,{type:"audio/webm"});
-        attemptBlobs[attemptForThisRecording] = audioBlob; // keep every attempt's audio (fix B7)
+        attemptBlobs[attemptForThisRecording] = audioBlob;
         const url = URL.createObjectURL(audioBlob);
         const player=document.getElementById("player");
         player.src=url; player.style.display="block";
@@ -318,7 +413,7 @@ async function toggleRecording(){
       };
       mediaRecorder.start();
       recStart = Date.now();
-      // FRESH transcript per recording — never bleed Attempt 1 into Attempt 2 (fix B1)
+      // FRESH transcript per recording — never bleed Attempt 1 into Attempt 2
       document.getElementById("transcript").value = "";
       finalTranscript = "";
       recordingCount++; currentAttempt = recordingCount;
@@ -344,7 +439,7 @@ function startRecognition(){
   recognition = new SR();
   recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = document.getElementById("langSel").value; // en-IN default for Indian-accented English (fix B6)
+  recognition.lang = document.getElementById("langSel").value;
   recognition.onresult = (e)=>{
     let interim="";
     for(let i=e.resultIndex;i<e.results.length;i++){
@@ -352,9 +447,9 @@ function startRecognition(){
       else interim += e.results[i][0].transcript;
     }
     document.getElementById("transcript").value = finalTranscript + interim;
-    try{ localStorage.setItem("speaklab_draft", JSON.stringify({t:finalTranscript, when:Date.now()})); }catch(e){} // autosave (fix B2)
+    try{ localStorage.setItem("speaklab_draft", JSON.stringify({t:finalTranscript, when:Date.now()})); }catch(e){}
   };
-  recognition.onerror = (e)=>{ // visible failure state (fix B4)
+  recognition.onerror = (e)=>{
     document.getElementById("recState").innerHTML =
       '<span class="rec-dot"></span>audio still recording — ⚠️ live transcription error: '+e.error+' (will retry; you can paste a transcript after)';
   };
@@ -369,12 +464,11 @@ function startRecognition(){
   try{ recognition.start(); }catch(e){}
 }
 
-window.addEventListener("beforeunload",(e)=>{ // don't lose a 17-min session silently (fix B2)
+window.addEventListener("beforeunload",(e)=>{
   if(recording || session || unsaved){ e.preventDefault(); e.returnValue=""; }
 });
 
 function downloadAudio(){
-  // saves EVERY attempt's audio from this session, not just the last (fix B7)
   let saved=0;
   attemptBlobs.forEach((blob,n)=>{
     if(!blob) return;
@@ -400,19 +494,20 @@ let lastMetrics=null;
 function analyse(){
   const text=document.getElementById("transcript").value.trim();
   if(!text){ alert("No transcript yet — record something or paste one."); return; }
-  if(currentAttempt===0) currentAttempt = 1; // pasted transcript with no recording
+  if(currentAttempt===0) currentAttempt = 1;
   const m = computeMetrics(text, lastDuration);
-  m.text = text; m.attempt = currentAttempt;
+  m.text = text; m.attempt = currentAttempt; m.mode = getMode();
   lastMetrics = m; unsaved = true;
-  // re-analysing the SAME recording replaces its result — attempts are tied to recordings, not clicks (fix B3)
   const existing = attempts.findIndex(a=>a.attempt===currentAttempt);
   if(existing>=0) attempts[existing]=m; else attempts.push(m);
   renderResults(m);
+  document.getElementById("resultsCard").scrollIntoView({behavior:"smooth"});
 }
 
 function metricCard(label,val,cls){ return '<div class="metric '+(cls||"")+'"><div class="v">'+val+'</div><div class="l">'+label+'</div></div>'; }
 
 function renderResults(m){
+  const isPro = m.mode!=="evd";
   document.getElementById("resultsCard").style.display="block";
   document.getElementById("attemptNum").textContent=m.attempt;
   const spmClass = m.spm>=3?"good":(m.spm>=1.5?"warn":"bad");
@@ -421,28 +516,31 @@ function renderResults(m){
   document.getElementById("metricsRow").innerHTML =
     metricCard("Words",m.words) +
     metricCard("WPM",m.wpm, m.wpm>=110&&m.wpm<=170?"good":"warn") +
-    metricCard("Signposts/min",m.spm,spmClass) +
+    (isPro ? metricCard("Signposts/min",m.spm,spmClass) : metricCard("Signposts",m.signCount,"")) +
     metricCard("Then-chains/100w",m.chainsPer100,chainClass) +
     metricCard("Fillers/min *",m.fillersPerMin,fillClass) +
     metricCard("Vocab variety",m.ttr,(m.ttr>=0.45?"good":"warn"));
   document.getElementById("transcriptView").innerHTML = highlightTranscript(m.text);
   document.getElementById("metricsNote").innerHTML =
     "* Fillers/min is rough — Chrome's transcription strips most 'um/uh', so treat it as a trend, not truth." +
-    (m.signCapped ? " ⚠️ Signpost count was capped — signposts only score when spread through real content, not chanted." : "");
+    (m.signCapped ? " ⚠️ Signpost count was capped — signposts only score when spread through real content." : "") +
+    (!isPro ? " Everyday mode: signposts aren't required — short complete sentences and story phrases are the goal." : "");
 
-  // rule-based coach tips — worst problem first
   const tips=[];
-  if(m.signCount===0) tips.push("❗ <b>No map, no signposts.</b> Start with: \"There are "+(Math.random()<.5?"three":"two")+" parts to this...\" then First / Next / Finally.");
-  else if(m.spm<1.5) tips.push("Signposting is appearing ("+m.signFound.slice(0,3).join(", ")+") but thin. Target: one signpost roughly every 30 seconds.");
-  else tips.push("✅ Good signposting: "+m.signFound.slice(0,4).join(", "));
-  if(m.chainsPer100>4) tips.push("❗ <b>Heavy then-chains</b> ("+m.chains+" total). Every 'and then' = end the sentence, breathe, start fresh: \"Next, ...\"");
-  else if(m.chains>0) tips.push("Chains reducing — "+m.chains+" left. Swap each for Next / After that / Following that.");
+  if(isPro){
+    if(m.signCount===0) tips.push("❗ <b>No map, no signposts.</b> Start with: \"There are three parts to this...\" then First / Next / Finally.");
+    else if(m.spm<1.5) tips.push("Signposting is appearing ("+m.signFound.slice(0,3).join(", ")+") but thin. Target: one signpost roughly every 30 seconds.");
+    else tips.push("✅ Good signposting: "+m.signFound.slice(0,4).join(", "));
+  } else {
+    tips.push("Everyday mode: aim for short complete sentences and story phrases (\"Long story short...\", \"Turns out...\"). A formal map would sound robotic — skip it.");
+  }
+  if(m.chainsPer100>4) tips.push("❗ <b>Heavy then-chains</b> ("+m.chains+" total). Every 'and then' = end the sentence, breathe, start fresh"+(isPro?": \"Next, ...\"":": \"After that...\" or just a new sentence."));
+  else if(m.chains>0) tips.push("Chains reducing — "+m.chains+" left. End the sentence instead.");
   else tips.push("✅ No then-chains. That was the baseline killer — keep it dead.");
   if(m.wpm<100) tips.push("Pace "+m.wpm+" wpm — don't force speed; it rises as retrieval gets faster. Focus on structure.");
-  if(m.fillersPerMin>4) tips.push("Fillers high ("+m.fillerFound.slice(0,3).join(", ")+"). Replace with a silent 1-second pause — silence sounds senior, fillers don't.");
+  if(m.fillersPerMin>4) tips.push("Fillers high ("+m.fillerFound.slice(0,3).join(", ")+"). Replace with a silent 1-second pause — silence sounds senior.");
   document.getElementById("coachTips").innerHTML = tips.map(t=>"<div style='margin:4px 0'>"+t+"</div>").join("");
 
-  // compare with previous attempt
   const cmp=document.getElementById("comparison");
   if(attempts.length>=2){
     const a=attempts[attempts.length-2], b=m;
@@ -458,80 +556,128 @@ function copyForClaude(){
   if(!lastMetrics){ return; }
   const m=lastMetrics;
   const prompt =
-`Spoken-English coach review (SpeakLab attempt ${m.attempt}, ${new Date().toISOString().slice(0,10)}).
-My known blockers: then-chains with no opening map (E1 sentence overload); intermediate vocabulary; want engaging, native-like phrasing for SAP architecture meetings.
+`Spoken-English coach review (SpeakLab v2, ${m.mode==="evd"?"Everyday":"Work"} mode, attempt ${m.attempt}, ${new Date().toISOString().slice(0,10)}).
+My known blockers: then-chains with no opening map (E1 sentence overload); intermediate vocabulary; want engaging, native-like phrasing for SAP architecture meetings AND everyday chat.
 Metrics: ${m.words} words, ${m.seconds}s, ${m.wpm} wpm, signposts/min ${m.spm}, then-chains/100w ${m.chainsPer100}, fillers/min ${m.fillersPerMin}.
 
 Transcript:
 "${m.text}"
 
-Please give: (1) my 2 worst sentences rebuilt — Original → Cleaner → Advanced; (2) 3 native-like chunks I could have used, tied to this exact topic; (3) ONE pattern to drill tomorrow; (4) update my loop files (results-log, score-ledger if scoreable, improvement-log, pattern-bank, dashboard) per Loops/Spoken-English rules.`;
+Please give: (1) my 2 worst sentences rebuilt — Original → Cleaner → Advanced; (2) 3 native-like phrases I could have used, tied to this exact topic and mode; (3) ONE pattern to drill tomorrow; (4) update my loop files (results-log, score-ledger if scoreable, improvement-log, pattern-bank, dashboard) per Loops/Spoken-English rules.`;
   navigator.clipboard.writeText(prompt).then(()=>{
     document.getElementById("copyMsg").textContent=" Copied — paste into Claude.";
     setTimeout(()=>document.getElementById("copyMsg").textContent="",4000);
   });
 }
 
-/* ================= CHUNK BANK ================= */
-const DEFAULT_CHUNKS = [
-  "There are three parts to this: …",
-  "Let me walk you through the trade-offs.",
-  "The key risk here is …, because …",
-  "What this means for the business is …",
-  "Let me set the scene first.",
-  "To put that in context, …",
-  "Here's what concerns me about this design.",
-  "My recommendation is to …, and here's why.",
-  "That's a fair point — the reason we went this way is …",
-  "To circle back to the integration question, …",
-  "Building on that, …",
-  "In short, we're trading performance for maintainability.",
-  "Before we sign off, we need evidence that …",
-  "Stepping back for a second — the big picture is …",
-  "If we don't fix this now, the knock-on effect is …",
-  "The way I'd frame it is …",
-  "Let's park that and come back to it.",
-  "From the platform's point of view, …",
-  "The short answer is yes — with one caveat.",
-  "I'd push back gently on that, because …",
-  "Long story short, …",
-  "The funny thing was, …",
-  "Turns out …",
-  "You won't believe what happened on the weekend.",
-  "To be fair, …",
-  "I was just about to say the same thing.",
-  "That reminds me of …",
-  "How did that go in the end?",
-  "Honestly, the best part was …",
-  "It wasn't what I expected — in a good way."
-];
+/* ================= PHRASE LIBRARY (the 1,000-phrase system, done right) ================= */
+const LIBRARY = {
+pro: [
+"There are three parts to this: …","Let me walk you through the trade-offs.","The key risk here is …, because …",
+"What this means for the business is …","Let me set the scene first.","To put that in context, …",
+"Here's what concerns me about this design.","My recommendation is to …, and here's why.",
+"That's a fair point — the reason we went this way is …","To circle back to the integration question, …",
+"Building on that, …","In short, we're trading performance for maintainability.","Before we sign off, we need evidence that …",
+"Stepping back for a second — the big picture is …","If we don't fix this now, the knock-on effect is …",
+"The way I'd frame it is …","Let's park that and come back to it.","From the platform's point of view, …",
+"The short answer is yes — with one caveat.","I'd push back gently on that, because …",
+"Let me make sure I've understood: you're saying …","Can we get that as a decision, with an owner and a date?",
+"What would it take to make this work?","I see two options — and I'd lean towards the second.",
+"That works for most cases, but if we have …, then …","We chose X because Y would have caused Z.",
+"The trade-off is speed now versus rework later.","Just to close the loop on yesterday's question, …",
+"Where's the evidence that this scales?","Who owns this once it goes live?","Let's timebox this to ten minutes.",
+"I want to flag something before it becomes a problem.","The dependency we keep forgetting is …",
+"Happy to be wrong here, but my reading is …","Can I offer a different angle?","Let me play devil's advocate for a moment.",
+"We're solving the wrong problem — the real issue is …","Let's separate the symptom from the cause.",
+"That's out of scope for this phase — noted for phase two.","What does success look like for this?",
+"I'll take that offline and come back by Friday.","Two quick things from my side.","Nothing blocking from my end.",
+"We're on track, with one risk worth naming.","Let me give you the headline first: …",
+"The numbers tell a different story: …","To manage expectations, …","Worst case, we roll back within an hour.",
+"That assumption needs testing before we commit.","Let's lock the interface and iterate behind it.",
+"It's technically possible — the question is whether it's wise.","I'd rather do fewer things properly.",
+"Here's where I need a decision from you.","Any objections before we move on?","Let me summarise what we've agreed.",
+"Next steps: I'll do X by Monday, you'll confirm Y.","On reflection, I think we should revisit that.",
+"The elegant solution is also the risky one.","Let's not gold-plate this.","Good catch — let me check and confirm.",
+"That deadline is ambitious — here's what's realistic.","I need one more day to give you a proper answer.",
+"Let me give credit where it's due — that design saved us.","What am I missing here?","How confident are we, honestly?",
+"If it helps, I can demo it right now.","Let's agree on the definition before we argue the solution.",
+"The integration is the easy part — the mapping is where it hurts.","That's a symptom of a deeper design gap.",
+"We should fail fast on this one.","I'd stage the rollout: pilot first, then scale.","Everything hinges on the data quality.",
+"Put simply, the system does three things.","Think of the subaccount as a fenced-off sandbox.",
+"The analogy I'd use is …","In practical terms, that means …","From a security standpoint, the gap is …",
+"The cost isn't the licence — it's the maintenance.","Let's quantify that risk instead of guessing.",
+"I'll draft it today and share it for review.","Consider it done.","Leave it with me.",
+"That aligns with what we saw in testing.","The logs tell us exactly where it broke.","Let's reproduce it before we theorise.",
+"I want to be upfront about a mistake I made.","Here's what I'd do differently next time.",
+"We under-estimated the effort — here's the revised picture.","Small ask: can you unblock me on access?",
+"For the record, I recommended against this in March.","Let's make the implicit explicit.",
+"The requirement is clear; the priority isn't.","Which of these can slip, if one must?"
+],
+evd: [
+"Long story short, …","The funny thing was, …","Turns out …","You won't believe what happened on the weekend.",
+"To be fair, …","I was just about to say the same thing.","That reminds me of …","How did that go in the end?",
+"Honestly, the best part was …","It wasn't what I expected — in a good way.","I'm glad you asked.",
+"Funny you mention that — …","No way. What happened next?","That makes two of us.","I know the feeling.",
+"Don't get me started on that.","It's a long story — short version: …","Believe it or not, …",
+"That's a fair call.","I couldn't agree more.","I'm not so sure about that, to be honest.",
+"Each to their own, I guess.","It grew on me.","I'm on the fence about it.","Hard to say, really.",
+"It's not my cup of tea, but I get the appeal.","You had to be there.","It made my day.",
+"I nearly fell off my chair.","We were in stitches.","Time got away from me.","It's been one of those weeks.",
+"I'm flat out at the moment.","Can't complain, honestly.","Same old, same old.","Living the dream.",
+"How good is this weather?","Got much on this weekend?","Any plans for the school holidays?",
+"How's the family doing?","Say hi to them for me.","We should catch up properly soon.",
+"I'll shoot you a message.","Let's lock something in.","My shout next time.","No worries at all.",
+"Easy done.","Too easy.","Good on you.","Fair enough.","That tracks.","Sounds about right.",
+"I'm keen if you are.","Count me in.","I'll give it a crack.","I gave it a red hot go.",
+"It's a bit of a hike, but worth it.","The kids had a ball.","We made a day of it.",
+"It hit the spot.","I could get used to this.","Not going to lie, I was nervous.",
+"Between you and me, …","Off the record, …","Here's the thing though — …","And that's when it got interesting.",
+"Anyway, the point is …","Where was I? Right — …","Picture this: …","Fast forward two hours, and …",
+"Meanwhile, back at home, …","The moral of the story: never trust a Sydney forecast.",
+"It could've been worse.","It all worked out in the end.","Lesson learned.","Never again — until next time.",
+"What about you — how was yours?","Go on, I'm listening.","Wait, back up a second.","You're kidding me.",
+"That explains a lot.","Now it all makes sense.","Small world.","Speak of the devil.",
+"I take it back — you were right.","My bad.","It slipped my mind completely.","I owe you one.",
+"Take your time, no rush.","It is what it is.","Touch wood.","Fingers crossed for Saturday."
+]};
 
 function getChunks(){
-  const saved = localStorage.getItem("speaklab_chunks");
-  return saved ? JSON.parse(saved) : DEFAULT_CHUNKS.map(c=>({t:c,used:0}));
+  const saved = localStorage.getItem("speaklab_chunks_v2");
+  if(saved) return JSON.parse(saved);
+  const init = [];
+  LIBRARY.pro.forEach(t=>init.push({t, m:"pro", used:0}));
+  LIBRARY.evd.forEach(t=>init.push({t, m:"evd", used:0}));
+  return init;
 }
-function saveChunks(c){ localStorage.setItem("speaklab_chunks",JSON.stringify(c)); }
+function saveChunks(c){ localStorage.setItem("speaklab_chunks_v2",JSON.stringify(c)); }
 
 function dayIndex(){
   const start = new Date("2026-07-13").getTime();
   return Math.max(0, Math.floor((Date.now()-start)/86400000));
 }
+// Today's 5: 3 from current mode + 2 from the other, least-used first, day-rotated
+function todaysFive(){
+  const chunks=getChunks(); const mode=getMode(); const di=dayIndex();
+  const pick=(m,k,offset)=>{
+    const pool=chunks.map((c,i)=>({c,i})).filter(x=>x.c.m===m);
+    pool.sort((a,b)=>(a.c.used-b.c.used) || (((a.i+di+offset)%7)-((b.i+di+offset)%7)));
+    return pool.slice(0,k);
+  };
+  return [...pick(mode,3,0), ...pick(mode==="pro"?"evd":"pro",2,3)];
+}
 function renderChunks(){
   const chunks=getChunks();
-  const di=dayIndex();
-  const today=[0,1,2].map(k=>chunks[(di*3+k)%chunks.length]);
-  document.getElementById("todayChunks").innerHTML = today.map((c)=>{
-    const idx=chunks.indexOf(c);
-    return '<div class="chunk"><span>'+c.t+'</span><button class="secondary" onclick="tickChunk('+idx+')">✓ used '+(c.used||0)+'×</button></div>';
-  }).join("");
-  document.getElementById("allChunks").innerHTML = chunks.map((c,i)=>
-    '<div class="chunk"><span>'+c.t+'</span><span class="small">used '+(c.used||0)+'×</span></div>').join("");
+  document.getElementById("todayChunks").innerHTML = todaysFive().map(x=>
+    '<div class="chunk"><span>'+x.c.t+'</span><span><span class="tag">'+(x.c.m==="pro"?"💼 work":"☕ everyday")+'</span> '+
+    '<button class="secondary" onclick="tickChunk('+x.i+')">✓ used '+(x.c.used||0)+'×</button></span></div>').join("");
+  document.getElementById("allChunks").innerHTML = chunks.map((c)=>
+    '<div class="chunk"><span>'+c.t+'</span><span class="small">'+(c.m==="pro"?"💼":"☕")+' used '+(c.used||0)+'×</span></div>').join("");
 }
 function tickChunk(i){ const c=getChunks(); c[i].used=(c[i].used||0)+1; saveChunks(c); renderChunks(); }
 function addChunk(){
   const v=document.getElementById("newChunk").value.trim();
   if(!v) return;
-  const c=getChunks(); c.push({t:v,used:0}); saveChunks(c);
+  const c=getChunks(); c.push({t:v, m:document.getElementById("newChunkMode").value, used:0}); saveChunks(c);
   document.getElementById("newChunk").value=""; renderChunks();
 }
 
@@ -540,7 +686,7 @@ function getHistory(){ const h=localStorage.getItem("speaklab_history"); return 
 function saveAttemptToHistory(){
   if(!lastMetrics) return;
   const h=getHistory();
-  h.push({ date:new Date().toISOString().slice(0,10), type:(session?session.type:"F"),
+  h.push({ date:new Date().toISOString().slice(0,10), type:(lastMetrics.mode||"pro"),
     attempt:lastMetrics.attempt, words:lastMetrics.words, wpm:lastMetrics.wpm,
     spm:lastMetrics.spm, chains:lastMetrics.chainsPer100, fillers:lastMetrics.fillersPerMin });
   localStorage.setItem("speaklab_history",JSON.stringify(h));
@@ -553,7 +699,7 @@ function saveAttemptToHistory(){
 function renderHistory(){
   const h=getHistory();
   document.querySelector("#historyTable tbody").innerHTML = h.slice(-30).reverse().map(r=>
-    "<tr><td>"+r.date+"</td><td>"+r.type+"</td><td>"+r.attempt+"</td><td>"+r.words+"</td><td>"+r.wpm+"</td><td>"+r.spm+"</td><td>"+r.chains+"</td><td>"+r.fillers+"</td></tr>").join("");
+    "<tr><td>"+r.date+"</td><td>"+(r.type==="evd"?"☕":"💼")+"</td><td>"+r.attempt+"</td><td>"+r.words+"</td><td>"+r.wpm+"</td><td>"+r.spm+"</td><td>"+r.chains+"</td><td>"+r.fillers+"</td></tr>").join("");
   drawChart(h);
 }
 function drawChart(h){
@@ -577,12 +723,36 @@ function exportHistory(){
   a.download="speaklab_history.json"; a.click();
 }
 
+/* ================= WIZARD ================= */
+const WIZ = [
+["Welcome to SpeakLab","This app fixes one thing: turning \"then... then... then\" rambling into clear, confident speech.\n\nYou need 17 minutes a day and your voice. Nothing is sent anywhere — everything stays on this device.\n\nThis tour takes 60 seconds."],
+["Step 1 — Pick your English","💼 Work English = meetings, design explanations. Scored on signposts (\"First... The key risk is...\").\n\n☕ Everyday English = stories, chat with colleagues. Scored on short sentences and story phrases (\"Long story short...\").\n\nSwitch any day. Do mostly Work, with Everyday 1-2× a week."],
+["Step 2 — Press the big Start button","That's it. The app picks today's session type, shows a topic suggestion, and walks you phase by phase with a countdown timer.\n\nJust read each instruction and do what it says. When the timer beeps, press Next phase."],
+["Step 3 — Speak twice","You'll record the same topic TWICE.\n\nAttempt 1: just talk — messy is fine, that's the 'before'.\nThen the app shows your then-chains in red.\nAttempt 2: same topic, map first, shorter. That re-take is where you actually improve."],
+["Step 4 — The 5 daily phrases","Below the recorder you'll find 5 phrases each day (3 work, 2 everyday). Say each one inside YOUR OWN sentence, out loud. Tick ✓ when you use one in a recording.\n\nThis is the famous \"1,000 phrases\" method — but done a few a day with real use, which is what the research says actually sticks."],
+["Step 5 — Send it to Claude","After analysing, press \"Copy feedback prompt for Claude\" and paste it into your Claude chat. Claude rebuilds your worst sentences (Original → Cleaner → Advanced) and logs your progress for the Sunday review.\n\nThat's the whole system. Press Finish, then hit the big Start button."]
+];
+let wizIdx=0;
+function startTour(){ wizIdx=0; document.getElementById("wizard").style.display="flex"; wizRender(); }
+function wizRender(){
+  document.getElementById("wizStep").textContent="Step "+(wizIdx+1)+" of "+WIZ.length;
+  document.getElementById("wizTitle").textContent=WIZ[wizIdx][0];
+  document.getElementById("wizText").textContent=WIZ[wizIdx][1];
+  document.getElementById("wizPrevBtn").style.display = wizIdx>0?"inline-block":"none";
+  document.getElementById("wizNextBtn").textContent = wizIdx===WIZ.length-1 ? "Finish ✓" : "Next ▶";
+}
+function wizNext(){ if(wizIdx<WIZ.length-1){ wizIdx++; wizRender(); } else wizClose(); }
+function wizPrev(){ if(wizIdx>0){ wizIdx--; wizRender(); } }
+function wizClose(){ document.getElementById("wizard").style.display="none"; localStorage.setItem("speaklab_tour_done","1"); }
+
 /* ================= INIT ================= */
 (function(){
-  const day=new Date().getDay(); // 0 Sun ... 6 Sat
-  const rec = (day===1||day===3||day===5) ? "Day A — Structure" : (day===2||day===4) ? "Day B — Chunks" : "Free rep or rest (Sunday = weekly review night)";
-  document.getElementById("suggestLine").textContent="Suggested today: "+rec;
-  // restore an unsaved draft from a crashed/closed session (fix B2)
+  importTopicsFromHash();
+  const day=new Date().getDay();
+  const rec = (day===1||day===3||day===5) ? "Today = Day A (Structure re-record)" : (day===2||day===4) ? "Today = Day B (Phrases & delivery)" : "Weekend = Free rep, or rest (Sunday 7pm = weekly review)";
+  const nTopics=(function(){try{return (JSON.parse(localStorage.getItem("speaklab_topics")||"[]")).length}catch(e){return 0}})();
+  document.getElementById("suggestLine").textContent=rec + (nTopics? " · "+nTopics+" personal topics loaded" : " · using generic topics — open your personal topics link once to load yours");
+  setMode(getMode());
   try{
     const d = JSON.parse(localStorage.getItem("speaklab_draft")||"null");
     if(d && d.t && d.t.trim() && (Date.now()-d.when) < 86400000){
@@ -590,7 +760,8 @@ function exportHistory(){
       document.getElementById("recState").textContent = "restored an unsaved transcript from your last session — analyse it or clear it";
     }
   }catch(e){}
-  renderChunks(); renderHistory();
+  renderHistory();
+  if(!localStorage.getItem("speaklab_tour_done") || location.search.includes("tour=1")) startTour();
 })();
 </script>
 </body>
