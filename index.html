@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SpeakLab v2 — Vivek's daily speaking gym</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
   :root{
     --bg:#0f172a; --card:#1e293b; --card2:#273449; --text:#e2e8f0; --muted:#94a3b8;
@@ -66,6 +67,21 @@
   <a href="guide.html" style="color:var(--accent)">📖 User guide</a> ·
   <a href="#" onclick="startTour();return false" style="color:var(--accent)">▶ Replay walkthrough</a></div>
 
+<!-- CLOUD / AUTH -->
+<div class="card" id="authCard">
+  <h2>☁️ Cloud &amp; AI coach <span class="small" id="authState">checking...</span></h2>
+  <div id="authOut">
+    <div class="small" style="margin-bottom:6px">Practice works without signing in. Sign in to unlock: history synced across phone + laptop, and instant AI feedback inside the app.</div>
+    <input id="authEmail" type="email" placeholder="your email" style="padding:8px; background:#0b1222; color:var(--text); border:1px solid var(--line); border-radius:8px; width:60%">
+    <button onclick="sendLink()">Send sign-in link</button>
+    <div class="small" id="authMsg"></div>
+  </div>
+  <div id="authIn" style="display:none">
+    <span class="small" id="authWho"></span>
+    <button class="secondary" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
 <!-- TODAY -->
 <div class="card" id="pickerCard">
   <h2>1 · Choose your English for today</h2>
@@ -122,9 +138,11 @@
   <div class="small" id="metricsNote" style="margin-top:4px"></div>
   <div id="coachTips" style="margin-top:10px"></div>
   <div id="comparison" style="margin-top:10px"></div>
-  <button onclick="copyForClaude()">📋 Copy feedback prompt for Claude</button>
+  <button onclick="getAIFeedback()" id="btnAI">🤖 Get AI feedback now</button>
+  <button class="secondary" onclick="copyForClaude()">📋 Copy prompt for Claude chat</button>
   <button class="secondary" onclick="saveAttemptToHistory()">Save attempt to history</button>
   <span id="copyMsg" class="small"></span>
+  <div id="aiFeedback" style="display:none; background:#0b1222; border:1px solid var(--accent); border-radius:8px; padding:12px; margin-top:10px; white-space:pre-wrap; font-size:.9rem"></div>
 </div>
 
 <!-- PHRASE LIBRARY -->
@@ -169,6 +187,65 @@ Privacy: live transcription uses Chrome's speech service, so recording audio is 
 </div>
 
 <script>
+/* ================= CLOUD (Supabase) ================= */
+const SUPA_URL = "https://uankrnrpsubmpwbdzcgh.supabase.co";
+const SUPA_KEY = "sb_publishable_-QnydcOdcCZyKfptb6WNsg_DcZd1mrm"; // publishable — safe in a browser, data guarded by row-level security
+const PROFILE = "My known blockers: then-chains with no opening map (E1 sentence overload); intermediate vocabulary; want engaging, native-like phrasing for SAP architecture meetings AND everyday chat.";
+const APP_ID = "speaklab";
+let sb = null, cloudUser = null;
+try { sb = window.supabase.createClient(SUPA_URL, SUPA_KEY); } catch(e) {}
+
+async function initAuth(){
+  if(!sb){ document.getElementById("authState").textContent = "(offline — library failed to load)"; return; }
+  const { data: { session } } = await sb.auth.getSession();
+  setCloudUser(session ? session.user : null);
+  sb.auth.onAuthStateChange((_e, s) => setCloudUser(s ? s.user : null));
+}
+function setCloudUser(u){
+  cloudUser = u;
+  document.getElementById("authState").textContent = u ? "connected" : "signed out";
+  document.getElementById("authOut").style.display = u ? "none" : "block";
+  document.getElementById("authIn").style.display = u ? "block" : "none";
+  if(u) document.getElementById("authWho").textContent = "Signed in as " + u.email + " · history syncing · AI coach ready. ";
+  renderHistory();
+}
+async function sendLink(){
+  const email = document.getElementById("authEmail").value.trim();
+  if(!email){ return; }
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+  document.getElementById("authMsg").textContent = error ? ("Error: " + error.message)
+    : "✓ Check your email and open the sign-in link IN THIS BROWSER (on iPhone: use Safari).";
+}
+async function signOut(){ await sb.auth.signOut(); }
+
+async function getAIFeedback(){
+  if(!lastMetrics){ alert("Analyse an attempt first."); return; }
+  if(!cloudUser){ alert("Sign in first (Cloud & AI card at the top) — that's what protects the API credit."); return; }
+  const btn = document.getElementById("btnAI");
+  btn.disabled = true; btn.textContent = "🤖 Coaching...";
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    const r = await fetch(SUPA_URL + "/functions/v1/coach", {
+      method: "POST",
+      headers: { "content-type": "application/json", "apikey": SUPA_KEY,
+                 "Authorization": "Bearer " + session.access_token },
+      body: JSON.stringify({ transcript: lastMetrics.text, mode: lastMetrics.mode,
+        profile: PROFILE,
+        metrics: { words: lastMetrics.words, wpm: lastMetrics.wpm, spm: lastMetrics.spm,
+                   chains: lastMetrics.chainsPer100, fillers: lastMetrics.fillersPerMin } })
+    });
+    const j = await r.json();
+    const box = document.getElementById("aiFeedback");
+    box.style.display = "block";
+    box.textContent = j.feedback || ("Error: " + (j.error || r.status));
+    if(j.feedback) lastMetrics.feedback = j.feedback;
+  }catch(e){
+    const box = document.getElementById("aiFeedback");
+    box.style.display = "block"; box.textContent = "Network error: " + e.message;
+  }
+  btn.disabled = false; btn.textContent = "🤖 Get AI feedback now";
+}
+
 /* ================= METRICS ENGINE (unchanged from v1, review-fixed) ================= */
 const SIGNPOSTS = [
   "first of all","firstly","first","secondly","second","thirdly","third","next","after that",
@@ -557,7 +634,7 @@ function copyForClaude(){
   const m=lastMetrics;
   const prompt =
 `Spoken-English coach review (SpeakLab v2, ${m.mode==="evd"?"Everyday":"Work"} mode, attempt ${m.attempt}, ${new Date().toISOString().slice(0,10)}).
-My known blockers: then-chains with no opening map (E1 sentence overload); intermediate vocabulary; want engaging, native-like phrasing for SAP architecture meetings AND everyday chat.
+${PROFILE}
 Metrics: ${m.words} words, ${m.seconds}s, ${m.wpm} wpm, signposts/min ${m.spm}, then-chains/100w ${m.chainsPer100}, fillers/min ${m.fillersPerMin}.
 
 Transcript:
@@ -683,21 +760,38 @@ function addChunk(){
 
 /* ================= HISTORY ================= */
 function getHistory(){ const h=localStorage.getItem("speaklab_history"); return h?JSON.parse(h):[]; }
-function saveAttemptToHistory(){
+async function saveAttemptToHistory(){
   if(!lastMetrics) return;
-  const h=getHistory();
-  h.push({ date:new Date().toISOString().slice(0,10), type:(lastMetrics.mode||"pro"),
+  const row = { date:new Date().toISOString().slice(0,10), type:(lastMetrics.mode||"pro"),
     attempt:lastMetrics.attempt, words:lastMetrics.words, wpm:lastMetrics.wpm,
-    spm:lastMetrics.spm, chains:lastMetrics.chainsPer100, fillers:lastMetrics.fillersPerMin });
-  localStorage.setItem("speaklab_history",JSON.stringify(h));
+    spm:lastMetrics.spm, chains:lastMetrics.chainsPer100, fillers:lastMetrics.fillersPerMin };
+  const h=getHistory(); h.push(row);
+  localStorage.setItem("speaklab_history",JSON.stringify(h)); // local always — works offline
+  let cloudNote = "";
+  if(cloudUser && sb){
+    const { error } = await sb.from("attempts").insert({ app: APP_ID,
+      mode: row.type, attempt: row.attempt, words: row.words, wpm: row.wpm, spm: row.spm,
+      chains: row.chains, fillers: row.fillers, transcript: lastMetrics.text,
+      feedback: lastMetrics.feedback || null });
+    cloudNote = error ? " (cloud sync failed: "+error.message+")" : " ☁ synced";
+  }
   unsaved = false;
   try{ localStorage.removeItem("speaklab_draft"); }catch(e){}
   renderHistory();
-  document.getElementById("copyMsg").textContent=" Saved.";
-  setTimeout(()=>document.getElementById("copyMsg").textContent="",3000);
+  document.getElementById("copyMsg").textContent=" Saved."+cloudNote;
+  setTimeout(()=>document.getElementById("copyMsg").textContent="",4000);
 }
-function renderHistory(){
-  const h=getHistory();
+async function renderHistory(){
+  let h = getHistory();
+  if(cloudUser && sb){ // cloud history wins when signed in — same list on every device
+    const { data, error } = await sb.from("attempts")
+      .select("created_at,mode,attempt,words,wpm,spm,chains,fillers")
+      .eq("app", APP_ID).order("created_at",{ascending:true}).limit(200);
+    if(!error && data && data.length){
+      h = data.map(r=>({ date:(r.created_at||"").slice(0,10), type:r.mode||"pro", attempt:r.attempt,
+        words:r.words, wpm:+r.wpm, spm:+r.spm, chains:+r.chains, fillers:+r.fillers }));
+    }
+  }
   document.querySelector("#historyTable tbody").innerHTML = h.slice(-30).reverse().map(r=>
     "<tr><td>"+r.date+"</td><td>"+(r.type==="evd"?"☕":"💼")+"</td><td>"+r.attempt+"</td><td>"+r.words+"</td><td>"+r.wpm+"</td><td>"+r.spm+"</td><td>"+r.chains+"</td><td>"+r.fillers+"</td></tr>").join("");
   drawChart(h);
@@ -761,6 +855,7 @@ function wizClose(){ document.getElementById("wizard").style.display="none"; loc
     }
   }catch(e){}
   renderHistory();
+  initAuth();
   if(!localStorage.getItem("speaklab_tour_done") || location.search.includes("tour=1")) startTour();
 })();
 </script>
