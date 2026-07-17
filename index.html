@@ -126,7 +126,9 @@
   <div class="small" style="margin-top:6px">Live transcript (Chrome). If it misses words, fix them below before analysing — rough is fine.</div>
   <textarea id="transcript" placeholder="Transcript appears here while you speak, or paste one..."></textarea>
   <button onclick="analyse()">Analyse this attempt</button>
+  <button onclick="audioAnalyse()" id="btnAudio">🎧 AI analyse my AUDIO (accurate)</button>
   <button class="secondary" onclick="downloadAudio()" id="btnDl" disabled>Save audio file(s)</button>
+  <div class="small">🎧 sends the actual recording to OpenAI: accurate transcript (your real "um"s kept) + coaching in one go. Needs sign-in.</div>
 </div>
 
 <!-- RESULTS -->
@@ -217,6 +219,44 @@ async function sendLink(){
     : "✓ Check your email and open the sign-in link IN THIS BROWSER (on iPhone: use Safari).";
 }
 async function signOut(){ await sb.auth.signOut(); }
+
+async function audioAnalyse(){
+  if(!cloudUser){ alert("Sign in first (Cloud & AI card at the top)."); return; }
+  const blob = attemptBlobs[currentAttempt] || audioBlob;
+  if(!blob){ alert("No recording yet — record something first."); return; }
+  if(blob.size > 9*1024*1024){ alert("Recording too large (~5 min max for audio analysis). Use the text Analyse instead."); return; }
+  const btn = document.getElementById("btnAudio");
+  btn.disabled = true; btn.textContent = "🎧 Transcribing & coaching...";
+  try{
+    const b64 = await new Promise((res, rej)=>{
+      const fr = new FileReader();
+      fr.onload = ()=>res(String(fr.result).split(",")[1]);
+      fr.onerror = rej;
+      fr.readAsDataURL(blob);
+    });
+    const { data: { session } } = await sb.auth.getSession();
+    const r = await fetch(SUPA_URL + "/functions/v1/coach-audio", {
+      method: "POST",
+      headers: { "content-type": "application/json", "apikey": SUPA_KEY,
+                 "Authorization": "Bearer " + session.access_token },
+      body: JSON.stringify({ audioB64: b64, mime: blob.type || "audio/webm",
+        mode: getMode(), profile: PROFILE, seconds: lastDuration })
+    });
+    const j = await r.json();
+    if(j.transcript){
+      document.getElementById("transcript").value = j.transcript; // accurate transcript replaces Chrome's guess
+      analyse(); // rescore metrics on the accurate words
+    }
+    const box = document.getElementById("aiFeedback");
+    box.style.display = "block";
+    box.textContent = j.feedback || ("Error: " + (j.error || r.status));
+    if(j.feedback && lastMetrics) lastMetrics.feedback = j.feedback;
+  }catch(e){
+    const box = document.getElementById("aiFeedback");
+    box.style.display = "block"; box.textContent = "Network error: " + e.message;
+  }
+  btn.disabled = false; btn.textContent = "🎧 AI analyse my AUDIO (accurate)";
+}
 
 async function getAIFeedback(){
   if(!lastMetrics){ alert("Analyse an attempt first."); return; }
